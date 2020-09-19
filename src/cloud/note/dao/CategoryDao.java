@@ -1,24 +1,23 @@
 package cloud.note.dao;
 
-import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import static cloud.note.config.Constants.DELIMITER;
+
 public class CategoryDao {
 
-    private DBUtil dbUtil;
+    private final DBUtil dbUtil;
     private String sql;
-    private Connection conn;
     private ResultSet rs;
     private int count;
 
     public CategoryDao() {
         this.dbUtil = new DBUtil();
-        int count = 0;
         try {
-            Connection conn = dbUtil.myGetConnection();
+            dbUtil.myGetConnection();
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -31,7 +30,7 @@ public class CategoryDao {
     }
 
     public Map<Integer, String> getMap() {
-        Map<Integer, String> map = new LinkedHashMap();
+        LinkedHashMap<Integer, String> map = new LinkedHashMap<>();
         this.rs = new CategoryDao().select();
         try {
             while (this.rs.next()) {
@@ -46,36 +45,35 @@ public class CategoryDao {
         return map;
     }
 
-    public String insert(String category) {
+    public boolean insert(String category) {
         sql = "insert into category (userId,categoryName,categoryCreateTime) values(?,?,?)";
-        String userId = category.split(";")[1];
-        String categoryName = category.split(";")[2];
-        String categoryCreateTime = category.split(";")[3];
+        String userId = category.split(DELIMITER)[1];
+        String categoryName = category.split(DELIMITER)[2];
+        String categoryCreateTime = category.split(DELIMITER)[3];
 
         String[] parameters = new String[]{userId, categoryName, categoryCreateTime};
         count = dbUtil.myExecuteUpdate(this.sql, parameters);
         dbUtil.closeAll();
-        return count == 0 ? "false" : "true";
+        return count != 0;
     }
 
 
-
-    public String update(String catetory) {
+    public boolean update(String category) {
         this.sql = "update category set categoryName=?,categoryCreateTime=? where id=?";
-        String categoryName = catetory.split(";")[1];
-        String categoryCreateTime = catetory.split(";")[2];
-        String id = catetory.split(";")[3];
+        String categoryName = category.split(DELIMITER)[1];
+        String categoryCreateTime = category.split(DELIMITER)[2];
+        String id = category.split(DELIMITER)[3];
 
         String[] parameters = new String[]{categoryName, categoryCreateTime, id};
         this.count = this.dbUtil.myExecuteUpdate(this.sql, parameters);
         dbUtil.closeAll();
-        return count == 0 ? "false" : "true";
+        return count != 0;
     }
 
-    public String delete(String id) {
+    public boolean delete(String id) {
         String sql = "delete from category where id=?";
-        this.count = dbUtil.myExecuteUpdate(sql, new String[]{id.split(";")[1]});
+        this.count = dbUtil.myExecuteUpdate(sql, new String[]{id.split(DELIMITER)[1]});
         dbUtil.closeAll();
-        return count == 0 ? "false" : "true";
+        return count != 0;
     }
 }

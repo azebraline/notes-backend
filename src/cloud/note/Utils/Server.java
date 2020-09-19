@@ -3,21 +3,27 @@ package cloud.note.Utils;
 import cloud.note.dao.ArticleDao;
 import cloud.note.dao.CategoryDao;
 import cloud.note.dao.UserDao;
+import com.mysql.cj.util.StringUtils;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.net.Socket;
 import java.sql.ResultSet;
-import java.util.LinkedHashMap;
+import java.util.ArrayList;
 import java.util.Map;
+
+import static cloud.note.config.Constants.DELIMITER;
+import static cloud.note.config.Constants.END;
 
 /**
  * 该类为多线程类，用于服务端
  */
 public class Server implements Runnable {
 
-    private Socket client = null;
+    private final Socket client;
+    private final UserDao userDao = new UserDao();
+    private final CategoryDao CategoryDao = new CategoryDao();
 
     public Server(Socket client) {
         this.client = client;
@@ -26,32 +32,32 @@ public class Server implements Runnable {
     public void run() {
         try {
             //获取Socket的输出流，用来向客户端发送数据
-            boolean f = true;
             PrintStream out = new PrintStream(client.getOutputStream());
             //获取Socket的输入流，用来接收从客户端发送过来的数据
             BufferedReader buf = new BufferedReader(new InputStreamReader(client.getInputStream()));
-            boolean flag = true;
-            while (flag) {
+            while (true) {
                 //接收从客户端发送过来的数据
                 String str = buf.readLine();
-                if (str == null || "".equals(str)) {
-                    flag = false;
-                } else {
-                    System.out.println(str);
-                    if (str.startsWith("login")) {
-                        String username = str.split(";")[1];
-                        String password = str.split(";")[2];
-                        int id = new UserDao().login(username, password);
-                        out.println(id);
-                    } else if (str.startsWith("reg")) {
-                            String res = new UserDao().sign(str.split(";")[1], str.split(";")[2]);
-                            out.println(res);
-                    } else if (str.startsWith("ArticleSelect")) {
-                        Map<Integer, String> map = new LinkedHashMap();
-                        int num = 1;
-                        String artData = "";
+                if (str.isEmpty()) {
+                    break;
+                }
+                System.out.println(str);
+                String[] parsedStr = str.split(DELIMITER);
+                String ids;
+                StringBuilder res;
+                int num, id;
+                switch (parsedStr[0]) {
+                    case "login":
+                        out.println(this.userDao.login(parsedStr[1], parsedStr[2]));
+                        break;
+                    case "reg":
+                        out.println(this.userDao.sign(parsedStr[1], parsedStr[2]));
+                        break;
+                    case "ArticleSelect":
+                        num = 1;
+                        StringBuilder artData = new StringBuilder();
                         ResultSet article = new ArticleDao().select();
-                        map = new CategoryDao().getMap();
+                        Map<Integer, String> map = this.CategoryDao.getMap();
                         while (article.next()) {
                             String artId = article.getString("articleId");
                             String userId = article.getString("userId");
@@ -61,57 +67,63 @@ public class Server implements Runnable {
                             String catName = map.get(Integer.parseInt(catId));
                             String content = article.getString("articleContent");
                             String time = article.getString("createTime");
-                            System.out.println("#######文章列表######\n"+str);
-                            System.out.println(userId.equals(str.split(";")[1]));
-                            if (userId.equals(str.split(";")[1])) {
-                                artData += artId + ";" + userId + ";" + catId + ";" + index + ";" + artName + ";" + catName + ";" + content + ";" + time + "10010";
+
+                            if (userId.equals(parsedStr[1])) {
+                                artData.append(artId).append(DELIMITER).append(userId).append(DELIMITER).append(catId).append(DELIMITER).append(index).append(DELIMITER).append(artName).append(DELIMITER).append(catName).append(DELIMITER).append(content).append(DELIMITER).append(time).append(END);
                                 num++;
                             }
                         }
-
                         System.out.println(artData);
                         out.println(artData);
                         article.close();
-                    } else if (str.startsWith("category")) {
-                        String res = "";
-                        int num = 1;
-                        ResultSet rs = new CategoryDao().select();
+                        break;
+                    case "category":
+                        res = new StringBuilder();
+                        num = 1;
+                        ResultSet rs = this.CategoryDao.select();
                         while (rs.next()) {
-                            String id = String.valueOf(rs.getInt("id"));
+                            ids = String.valueOf(rs.getInt("id"));
                             String userId = String.valueOf(rs.getInt("userId"));
                             String index = String.valueOf(num);
                             String name = rs.getString("categoryName");
                             String time = rs.getString("categoryCreateTime");
-                            if (userId.equals(str.split(";")[1])) {
-                                res += id + ";" + userId + ";" + index + ";" + name + ";" + time + "10010";
+                            if (userId.equals(str.split(DELIMITER)[1])) {
+                                res.append(ids).append(DELIMITER).append(userId).append(DELIMITER).append(index).append(DELIMITER).append(name).append(DELIMITER).append(time).append(END);
                                 num++;
                             }
                         }
                         rs.close();
                         out.println(res);
-
-                    } else if (str.startsWith("getmap")) {
-                        String res = "";
-                        Map<Integer, String> map = new LinkedHashMap();
-                        map = new CategoryDao().getMap();
-                        for(Integer key : map.keySet()){
-                            String value = map.get(key);
-                            res += key+";"+value+"10010";
+                        break;
+                    case "getMap":
+                        res = new StringBuilder();
+                        Map<Integer, String> catMap = new CategoryDao().getMap();
+                        for (Integer key : catMap.keySet()) {
+                            String value = catMap.get(key);
+                            res.append(key).append(DELIMITER).append(value).append(END);
                         }
                         out.println(res);
-                    } else if (str.startsWith("ArticleInsert")){
+                        break;
+                    case "ArticleInsert":
                         out.println(new ArticleDao().insert(str));
-                    } else if (str.startsWith("ArticleUpdate")){
+                        break;
+                    case "ArticleUpdate":
                         out.println(new ArticleDao().update(str));
-                    } else if (str.startsWith("ArticleDelete")){
-                        out.println(new ArticleDao().delete(str.split(";")[1]));
-                    } else if (str.startsWith("CatInsert")){
+                        break;
+                    case "ArticleDelete":
+                        out.println(new ArticleDao().delete(parsedStr[1]));
+                        break;
+                    case "CatInsert":
                         out.println(new CategoryDao().insert(str));
-                    } else if (str.startsWith("CatUpdate")){
+                        break;
+                    case "CatUpdate":
                         out.println(new CategoryDao().update(str));
-                    } else if (str.startsWith("CatDelete")){
+                        break;
+                    case "CatDelete":
                         out.println(new CategoryDao().delete(str));
-                    }
+                        break;
+                    default:
+                        break;
                 }
             }
             out.close();
@@ -120,5 +132,4 @@ public class Server implements Runnable {
             e.printStackTrace();
         }
     }
-
 }
